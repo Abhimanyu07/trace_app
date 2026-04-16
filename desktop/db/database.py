@@ -1,8 +1,26 @@
 import sqlite3
 import time
+from contextlib import contextmanager
 from typing import Optional
 from urllib.parse import urlparse
 from ..config import DB_PATH
+
+
+@contextmanager
+def get_db():
+    """Context manager for safe DB connections."""
+    conn = sqlite3.connect(DB_PATH)
+    conn.row_factory = sqlite3.Row
+    conn.execute("PRAGMA journal_mode=WAL")
+    conn.execute("PRAGMA foreign_keys=ON")
+    try:
+        yield conn
+        conn.commit()
+    except Exception:
+        conn.rollback()
+        raise
+    finally:
+        conn.close()
 
 
 def get_connection() -> sqlite3.Connection:
@@ -91,26 +109,21 @@ def _extract_domain(url: Optional[str]) -> Optional[str]:
 def insert_usage_record(app_name: str, window_title: str = None,
                         url: str = None, project_path: str = None) -> int:
     domain = _extract_domain(url)
-    conn = get_connection()
-    cursor = conn.execute(
-        "INSERT INTO usage_records (app_name, window_title, url, domain, project_path, start_time) VALUES (?, ?, ?, ?, ?, ?)",
-        (app_name, window_title, url, domain, project_path, int(time.time()))
-    )
-    record_id = cursor.lastrowid
-    conn.commit()
-    conn.close()
-    return record_id
+    with get_db() as conn:
+        cursor = conn.execute(
+            "INSERT INTO usage_records (app_name, window_title, url, domain, project_path, start_time) VALUES (?, ?, ?, ?, ?, ?)",
+            (app_name, window_title, url, domain, project_path, int(time.time()))
+        )
+        return cursor.lastrowid
 
 
 def close_usage_record(record_id: int):
     now = int(time.time())
-    conn = get_connection()
-    conn.execute(
-        "UPDATE usage_records SET end_time = ?, duration_seconds = (? - start_time) WHERE id = ? AND end_time IS NULL",
-        (now, now, record_id)
-    )
-    conn.commit()
-    conn.close()
+    with get_db() as conn:
+        conn.execute(
+            "UPDATE usage_records SET end_time = ?, duration_seconds = (? - start_time) WHERE id = ? AND end_time IS NULL",
+            (now, now, record_id)
+        )
 
 
 def get_usage_today() -> list:

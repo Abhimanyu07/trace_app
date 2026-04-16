@@ -39,17 +39,20 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
 
   @override
   void dispose() {
+    context.read<UsageProvider>().stopAutoRefresh();
     WidgetsBinding.instance.removeObserver(this);
     super.dispose();
   }
 
   @override
   void didChangeAppLifecycleState(AppLifecycleState state) {
-    // Re-check permission when returning from settings
+    final usage = context.read<UsageProvider>();
     if (state == AppLifecycleState.resumed) {
-      final usage = context.read<UsageProvider>();
       usage.checkPhonePermission();
       usage.refreshAll();
+      usage.startAutoRefresh();
+    } else if (state == AppLifecycleState.paused) {
+      usage.stopAutoRefresh();
     }
   }
 

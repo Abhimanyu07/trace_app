@@ -75,6 +75,9 @@ def _get_browser_url(app_name: str) -> Optional[str]:
 
     if app_name == "Safari":
         script = 'tell application "Safari" to get URL of front document'
+    elif app_name == "Firefox":
+        # Firefox doesn't expose tabs via AppleScript; extract domain from window title
+        return None
     elif app_name in app_script_names:
         script_name = app_script_names[app_name]
         script = f'tell application "{script_name}" to get URL of active tab of front window'
@@ -185,9 +188,11 @@ class MacOSTracker:
     def _is_same_window(self, window: dict) -> bool:
         if not self._current_window:
             return False
+        # Compare app, title, AND url (so browser tab switches are tracked)
         return (
             self._current_window["app_name"] == window["app_name"]
             and self._current_window["window_title"] == window["window_title"]
+            and self._current_window.get("url") == window.get("url")
         )
 
 

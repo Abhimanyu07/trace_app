@@ -94,11 +94,12 @@ class DesktopApiService {
 
   // --- HTTP Helpers ---
 
+  static const _timeout = Duration(seconds: 10);
+
   Future<Map<String, dynamic>> _get(String path) async {
-    final response = await http.get(
-      Uri.parse('$_baseUrl$path'),
-      headers: _headers,
-    );
+    final response = await http
+        .get(Uri.parse('$_baseUrl$path'), headers: _headers)
+        .timeout(_timeout);
     if (response.statusCode == 200) {
       return jsonDecode(response.body);
     }
@@ -107,11 +108,10 @@ class DesktopApiService {
 
   Future<Map<String, dynamic>> _put(
       String path, Map<String, dynamic> body) async {
-    final response = await http.put(
-      Uri.parse('$_baseUrl$path'),
-      headers: _headers,
-      body: jsonEncode(body),
-    );
+    final response = await http
+        .put(Uri.parse('$_baseUrl$path'),
+            headers: _headers, body: jsonEncode(body))
+        .timeout(_timeout);
     if (response.statusCode == 200) {
       return jsonDecode(response.body);
     }

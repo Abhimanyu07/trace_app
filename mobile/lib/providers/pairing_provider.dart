@@ -32,8 +32,16 @@ class PairingProvider extends ChangeNotifier {
     final prefs = await SharedPreferences.getInstance();
     final devicesJson = prefs.getStringList('connected_devices') ?? [];
     for (final json in devicesJson) {
-      final device = ConnectedDevice.fromJson(jsonDecode(json));
-      _devices.add(device);
+      try {
+        final device = ConnectedDevice.fromJson(jsonDecode(json));
+        _devices.add(device);
+      } catch (_) {
+        // Skip corrupted entries
+      }
+    }
+    // Re-save to clean out any corrupted entries
+    if (_devices.length != devicesJson.length) {
+      await _saveDevices();
     }
     // Configure API with first desktop if available
     _configureApiFromDevices();
