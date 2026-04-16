@@ -156,7 +156,9 @@ def get_usage_range(start_ts: int, end_ts: int) -> list:
 
 
 def get_daily_summary(date_ts: int) -> dict:
-    day_end = date_ts + 86400
+    import datetime
+    date = datetime.date.fromtimestamp(date_ts)
+    day_end = _day_end_ts(date)
     conn = get_connection()
     rows = conn.execute(
         """SELECT ur.app_name, ur.domain,
@@ -206,19 +208,25 @@ def get_daily_summary(date_ts: int) -> dict:
 
 
 def get_weekly_summary(week_start_ts: int) -> list:
+    import datetime
+    start_date = datetime.date.fromtimestamp(week_start_ts)
     summaries = []
     for i in range(7):
-        day_ts = week_start_ts + (i * 86400)
+        day = start_date + datetime.timedelta(days=i)
+        day_ts = _day_start_ts(day)
         summaries.append(get_daily_summary(day_ts))
     return summaries
 
 
 def get_hourly_breakdown(date_ts: int) -> list:
+    import datetime
+    date = datetime.date.fromtimestamp(date_ts)
+    base = datetime.datetime.combine(date, datetime.time.min)
     conn = get_connection()
     hours = []
     for h in range(24):
-        hour_start = date_ts + (h * 3600)
-        hour_end = hour_start + 3600
+        hour_start = int((base + datetime.timedelta(hours=h)).timestamp())
+        hour_end = int((base + datetime.timedelta(hours=h + 1)).timestamp())
         row = conn.execute(
             "SELECT COALESCE(SUM(duration_seconds), 0) as total FROM usage_records WHERE start_time >= ? AND start_time < ? AND duration_seconds >= ?",
             (hour_start, hour_end, 3)
@@ -339,10 +347,22 @@ def verify_token(token: str) -> bool:
 
 # --- Helpers ---
 
+def _day_start_ts(date: 'datetime.date') -> int:
+    """Get start-of-day timestamp using proper calendar math (DST-safe)."""
+    import datetime
+    return int(datetime.datetime.combine(date, datetime.time.min).timestamp())
+
+
+def _day_end_ts(date: 'datetime.date') -> int:
+    """Get start-of-next-day timestamp (DST-safe)."""
+    import datetime
+    next_day = date + datetime.timedelta(days=1)
+    return int(datetime.datetime.combine(next_day, datetime.time.min).timestamp())
+
+
 def _today_start_ts() -> int:
     import datetime
-    today = datetime.date.today()
-    return int(datetime.datetime.combine(today, datetime.time.min).timestamp())
+    return _day_start_ts(datetime.date.today())
 
 
 def get_current_record_id() -> Optional[int]:

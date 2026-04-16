@@ -65,6 +65,11 @@ class TrayApp:
         if self._icon:
             self._icon.menu = self._build_menu()
 
+    def update_pair_code(self, code: str):
+        self._pair_code = code
+        if self._icon:
+            self._icon.menu = self._build_menu()
+
     @property
     def is_paused(self) -> bool:
         return self._is_paused
