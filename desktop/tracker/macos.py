@@ -9,6 +9,28 @@ from ..db.database import insert_usage_record, close_usage_record
 logger = logging.getLogger(__name__)
 
 
+def is_screen_locked() -> bool:
+    """Check if the macOS screen is locked."""
+    try:
+        import Quartz
+        session = Quartz.CGSessionCopyCurrentDictionary()
+        if session:
+            return bool(session.get("CGSSessionScreenIsLocked", 0))
+    except ImportError:
+        # Fallback: check via ioreg if Quartz not available
+        try:
+            result = subprocess.run(
+                ["ioreg", "-n", "Root", "-d1", "-w", "0"],
+                capture_output=True, text=True, timeout=3
+            )
+            return "CGSSessionScreenIsLocked" in result.stdout
+        except Exception:
+            pass
+    except Exception:
+        pass
+    return False
+
+
 def get_active_window() -> Optional[dict]:
     """Get the currently active window info using AppleScript."""
     script = '''
@@ -112,6 +134,7 @@ class MacOSTracker:
     def __init__(self):
         self._running = False
         self._paused = False
+        self._screen_locked = False
         self._thread: Optional[threading.Thread] = None
         self._current_record_id: Optional[int] = None
         self._current_window: Optional[dict] = None
@@ -141,10 +164,14 @@ class MacOSTracker:
 
     @property
     def is_paused(self) -> bool:
-        return self._paused
+        return self._paused or self._screen_locked
+
+    @property
+    def is_screen_locked(self) -> bool:
+        return self._screen_locked
 
     def get_current(self) -> Optional[dict]:
-        if self._paused:
+        if self._paused or self._screen_locked:
             return None
         return self._current_window
 
@@ -157,7 +184,17 @@ class MacOSTracker:
     def _track_loop(self):
         while self._running:
             try:
-                if not self._paused:
+                # Auto-pause/resume based on screen lock
+                locked = is_screen_locked()
+                if locked and not self._screen_locked:
+                    self._screen_locked = True
+                    self._close_current_record()
+                    logger.info("Screen locked — tracking paused")
+                elif not locked and self._screen_locked:
+                    self._screen_locked = False
+                    logger.info("Screen unlocked — tracking resumed")
+
+                if not self._paused and not self._screen_locked:
                     window = get_active_window()
                     if window:
                         self._process_window(window)
